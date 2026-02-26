@@ -1,5 +1,5 @@
 // App.js - VWO Style Financial Analysis Platform
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   useAuthenticationStatus,
   useUserData,
