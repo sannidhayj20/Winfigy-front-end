@@ -13,8 +13,8 @@ import {
 } from '@nhost/react';
 import { useMutation, useSubscription, gql } from '@apollo/client';
 import {
-  Upload, FileText, Lock, LogOut, Loader2,
-  ShieldCheck, Clock, UserPlus, Key, AlertCircle,
+  Upload, FileText, Lock, LogOut,
+  ShieldCheck, Clock, AlertCircle,
   Trash2, Send, CheckCircle, BarChart3,
   TrendingUp, FileSearch, Zap, MessageSquare,
   Plus, ChevronRight, Eye, EyeOff
@@ -92,7 +92,6 @@ function App() {
   const { isAuthenticated, isLoading } = useAuthenticationStatus();
   const user = useUserData();
   const userId = useUserId();
-  const nhost = useNhostClient();
   const { signOut } = useSignOut();
   const { upload } = useFileUpload();
 
@@ -659,9 +658,12 @@ const LoginPage = () => {
             {['Privacy Policy', 'Terms of Service', 'Support'].map((link, i) => (
               <React.Fragment key={link}>
                 {i > 0 && <span style={{ color: '#cbd5e1', fontSize: 12 }}>•</span>}
-                <a href="#" style={{ fontSize: 12, color: '#94a3b8', textDecoration: 'none' }}
+                <button
+                  onClick={() => {}}
+                  style={{ fontSize: 12, color: '#94a3b8', textDecoration: 'none', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
                   onMouseEnter={e => e.currentTarget.style.color = '#475569'}
-                  onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}>{link}</a>
+                  onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+                >{link}</button>
               </React.Fragment>
             ))}
           </div>
