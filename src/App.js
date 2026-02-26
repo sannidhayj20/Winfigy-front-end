@@ -1,5 +1,5 @@
 // App.js - VWO Style Financial Analysis Platform
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   useAuthenticationStatus,
   useUserData,
@@ -94,6 +94,20 @@ function App() {
   const userId = useUserId();
   const { signOut } = useSignOut();
   const { upload } = useFileUpload();
+
+  // Detect if user arrived via a password-reset email link.
+  // Nhost can redirect with:
+  //   ?refreshToken=xxx&type=passwordReset  (Nhost v2)
+  //   #type=recovery&...                    (Supabase-style fragment)
+  const [isPasswordReset, setIsPasswordReset] = useState(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    return (
+      searchParams.get('type') === 'passwordReset' ||
+      hashParams.get('type') === 'recovery' ||
+      hashParams.get('type') === 'passwordReset'
+    );
+  });
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -224,6 +238,15 @@ function App() {
     );
   }
 
+  // If the user arrived via a password-reset link, show the new-password form
+  if (isPasswordReset) {
+    return <ResetPasswordPage onDone={() => {
+      setIsPasswordReset(false);
+      // Clean the URL so a refresh doesn't re-trigger this
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }} />;
+  }
+
   return (
     <div style={{ minHeight: '100vh', fontFamily: "'DM Sans', -apple-system, sans-serif" }}>
       <style>{`
@@ -315,6 +338,196 @@ function App() {
     </div>
   );
 }
+
+// ============================================
+// RESET PASSWORD PAGE
+// Shown when user clicks the link in their reset email
+// ============================================
+const ResetPasswordPage = ({ onDone }) => {
+  const nhost = useNhostClient();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword.length < 6) return setError('Password must be at least 6 characters.');
+    if (newPassword !== confirmPassword) return setError('Passwords do not match.');
+
+    setIsSubmitting(true);
+    try {
+      const { error: changeError } = await nhost.auth.changePassword({ newPassword });
+      if (changeError) throw new Error(changeError.message);
+      setSuccess(true);
+      // Redirect to login after 2.5s
+      setTimeout(() => onDone(), 2500);
+    } catch (err) {
+      setError(err.message || 'Failed to update password. The reset link may have expired — please request a new one.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)', fontFamily: "'DM Sans', -apple-system, sans-serif", padding: 24 }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        .rp-input { width: 100%; padding: 11px 12px 11px 40px; border-radius: 8px; background: #fff; border: 1.5px solid #e2e8f0; font-size: 14px; font-family: inherit; outline: none; transition: border-color 0.15s, box-shadow 0.15s; color: #0f172a; }
+        .rp-input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        .rp-input.error { border-color: #ef4444; }
+      `}</style>
+
+      <div style={{ width: '100%', maxWidth: 420, animation: 'fadeIn 0.3s ease' }}>
+        {/* Brand pill */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 20, background: '#fff', padding: '8px 16px', borderRadius: 100, border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div style={{ background: '#1d4ed8', padding: '5px', borderRadius: 6, display: 'flex' }}>
+              <BarChart3 size={16} color="#fff" />
+            </div>
+            <span style={{ fontWeight: 700, color: '#0f172a', fontSize: 15 }}>Wingify</span>
+          </div>
+          <h2 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', marginBottom: 8, letterSpacing: '-0.3px' }}>Set a new password</h2>
+          <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.5 }}>
+            Choose a strong password for your account.
+          </p>
+        </div>
+
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '32px 32px 24px' }}>
+            {success ? (
+              <div style={{ textAlign: 'center', padding: '16px 0' }}>
+                <div style={{ width: 56, height: 56, background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                  <CheckCircle size={28} color="#16a34a" />
+                </div>
+                <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', marginBottom: 8 }}>Password updated!</h3>
+                <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.5 }}>
+                  Your password has been changed successfully. Redirecting you to sign in...
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit}>
+                {/* New Password */}
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 7 }}>
+                    New Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}>
+                      <Lock size={15} />
+                    </div>
+                    <input
+                      type={showNew ? 'text' : 'password'}
+                      className={`rp-input${error ? ' error' : ''}`}
+                      style={{ paddingRight: 40 }}
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      autoFocus
+                    />
+                    <button type="button" onClick={() => setShowNew(!showNew)}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}>
+                      {showNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 5 }}>Minimum 6 characters</div>
+                </div>
+
+                {/* Confirm Password */}
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 7 }}>
+                    Confirm Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }}>
+                      <Lock size={15} />
+                    </div>
+                    <input
+                      type={showConfirm ? 'text' : 'password'}
+                      className={`rp-input${error && confirmPassword ? ' error' : ''}`}
+                      style={{ paddingRight: 40 }}
+                      placeholder="Re-enter new password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                    <button type="button" onClick={() => setShowConfirm(!showConfirm)}
+                      style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}>
+                      {showConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                  {/* Live match indicator */}
+                  {confirmPassword.length > 0 && (
+                    <div style={{ fontSize: 12, marginTop: 5, color: newPassword === confirmPassword ? '#16a34a' : '#dc2626', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {newPassword === confirmPassword
+                        ? <><CheckCircle size={11} /> Passwords match</>
+                        : <><AlertCircle size={11} /> Passwords don't match yet</>}
+                    </div>
+                  )}
+                </div>
+
+                {/* Error */}
+                {error && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+                    <AlertCircle size={15} color="#dc2626" style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 13, color: '#b91c1c', lineHeight: 1.4 }}>{error}</span>
+                  </div>
+                )}
+
+                {/* Spam note */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 12px', marginBottom: 20 }}>
+                  <span style={{ fontSize: 15, flexShrink: 0 }}>📬</span>
+                  <span style={{ fontSize: 12, color: '#92400e', lineHeight: 1.5 }}>
+                    If you didn't receive the reset email, check your <strong>spam or junk folder</strong> — emails from Nhost may be filtered there.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{
+                    width: '100%', padding: '12px', background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+                    color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
+                    fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', gap: 8, opacity: isSubmitting ? 0.65 : 1,
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <div style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                      Updating...
+                    </>
+                  ) : (
+                    <><ShieldCheck size={16} /> Update Password</>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+
+          <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
+            <button
+              onClick={onDone}
+              style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: '#2563eb', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ← Back to sign in
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ============================================
 // LOGIN PAGE - VWO Split-Screen Style
